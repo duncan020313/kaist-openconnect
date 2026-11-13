@@ -53,17 +53,10 @@ export KVPN_USER=your_id   # add to ~/.zshrc or ~/.bashrc
 
 ![A full kvpn session: ID/password/realm prompts, SMS one-time code, Keychain storage offer, and OpenConnect bringing up the tunnel](docs/screenshot.png)
 
-With stored credentials, later runs skip straight to the code prompt:
-
-```
-$ ./kvpn
-=== KAIST VPN (kvpn) ===
-Using stored credentials for your_id (KAIST Members). Run `kvpn --forget` to remove.
-Send code via:
-  1) SMS (default)
-  2) Email
-Choice [1]:
-```
+On macOS, running `kvpn` retrieves the email code from Mail automatically and
+connects with hotspot-compatible settings. Both the KAIST password and the local
+`sudo` password are requested before sending the code. A macOS notification with
+sound appears when OpenConnect reports that the tunnel is connected.
 
 ## Why
 
@@ -92,10 +85,45 @@ Developed and tested on macOS. It should work on Linux with OpenConnect's defaul
 Run `./kvpn` and follow the prompts. To disconnect, press **Ctrl-C** in the
 terminal running it — OpenConnect tears down the tunnel and restores your routes.
 
+### Hotspots, automatic email codes, and notifications
+
+```sh
+./kvpn                      # macOS: automatic Mail code + hotspot settings
+./kvpn --sms                # enter an SMS code manually
+./kvpn --email --manual-code # enter an email code manually
+./kvpn --standard-network   # allow UDP and the server's default MTU
+./kvpn --help
+```
+
+- **Hotspots:** the default uses `--no-dtls --mtu=1280 --base-mtu=1400` to
+  accommodate mobile networks that block UDP/ESP or have smaller MTUs. These
+  settings also work on Wi-Fi. Use `--standard-network` to restore UDP and the
+  server's MTU. This does not resolve every possible hotspot issue, such as DNS
+  failures or blocked login portals.
+- **Automatic email codes:** add the receiving account to macOS Mail. Allow your
+  terminal to control Mail when prompted; manage this under **System Settings →
+  Privacy & Security → Automation**. Only new messages in the inbox received
+  after this request qualify. The default requires a sender at `@kaist.ac.kr`,
+  VPN context, and a labeled code. Existing messages and ambiguous codes are
+  ignored. Codes are neither printed nor saved. For another sender, set its
+  exact address with `export KVPN_MAIL_SENDER=actual-address@example.com`.
+  Keep these messages in the inbox if you use mail filtering rules. Mail access
+  failures or a 120-second timeout fall back to manual entry.
+- **Password order:** KAIST credentials and local `sudo` authorization are
+  collected before requesting the code. Authorization is refreshed while
+  waiting; launching the tunnel will not prompt for another password.
+- **Notifications:** a macOS notification with sound appears after OpenConnect's
+  `Connected as …` message. Check notification settings and Focus if it does
+  not appear. Notification failures do not interrupt the VPN.
+
+Linux retains the SMS/Email selection and manual code entry. The hotspot settings
+and early password prompts also apply on Linux; Mail automation and macOS
+notifications are macOS-only.
+
 ### Stored credentials
 
 After a successful login, kvpn offers to store your credentials so future runs
-jump straight to the "Send code via" prompt. The password goes into the
+skip the KAIST password prompt. The password goes into the
 **macOS Keychain** (service `kvpn`); your ID and realm go into
 `~/.config/kvpn/config.json` (user-only, `0600`). On systems without a
 Keychain, the password is kept in that same `0600` file instead (kvpn warns
@@ -141,8 +169,8 @@ and the AirCUVE portal (`kvpnportal.kaist.ac.kr:8443`):
   required on every connection.
 - **Stored password went stale?** If your KAIST password changes, the final
   login step will fail — run `kvpn --forget` and log in again.
-- **`sudo` prompt collision:** if `sudo` misbehaves because stdin is piped, run
-  `sudo -v` first, then `./kvpn`.
+- **`sudo` authorization failure:** authorization is checked before sending a
+  code. Verify your local login password and administrator rights, then retry.
 - **Harmless route warnings:** on connect you may see two lines like
   `Can't assign requested address` / `File exists` for a route to your own VPN IP
   or an already-present route. Every other route still installs; this doesn't
